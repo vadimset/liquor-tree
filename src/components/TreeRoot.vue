@@ -21,6 +21,7 @@
             :key="node.id"
             :node="node"
             :options="opts"
+            :tree="tree"
           />
         </template>
         <template v-else>
@@ -44,9 +45,11 @@
 <script>
   import TreeNode from './TreeNode.vue'
   import DraggableNode from './DraggableNode.vue'
-  import TreeMixin from '../mixins/TreeMixin.js'
+  import TreeMixin, { initEvents } from '../mixins/TreeMixin.js'
+  import initKeyboardNavigation from '../utils/keyboardNavigation'
   import TreeDnd from '../mixins/DndMixin.js'
   import Tree from '../lib/Tree.js'
+  import { computed } from 'vue'
 
   const defaults = {
     direction: 'ltr',
@@ -94,9 +97,9 @@
 
     mixins: [TreeMixin, TreeDnd],
 
-    provide: _ => ({
-      tree: null
-    }),
+    // provide: _ => ({
+    //   tree: null
+    // }),
 
     props: {
       data: {},
@@ -111,6 +114,56 @@
       tag: {
         type: String,
         default: 'div'
+      }
+    },
+
+    provide() {
+      return {
+        tree: computed(() => this.tree)
+      }
+    },
+
+    mounted () {
+      const tree = new Tree(this)
+      let dataProvider
+
+      this.tree = tree
+      // this._provided.tree = tree
+
+      if (!this.data && this.opts.fetchData) {
+        // Get initial data if we don't have a data directly
+        // In this case we call 'fetcher' with node.id == 'root' && node.name == 'root'
+        dataProvider = tree.fetchInitData()
+      } else if (this.data && this.data.then) {
+        // Yeah... nice check!
+        dataProvider = this.data
+        this.loading = true
+      } else {
+        dataProvider = Promise.resolve(this.data)
+      }
+
+      dataProvider.then(data => {
+        if (!data) {
+          data = []
+        }
+
+        if (this.opts.store) {
+          this.connectStore(this.opts.store)
+        } else {
+          this.tree.setModel(data)
+        }
+
+        if (this.loading) {
+          this.loading = false
+        }
+
+        this.$emit('tree:mounted', this)
+
+        initEvents(this)
+      })
+
+      if (this.opts.keyboardNavigation !== false) {
+        initKeyboardNavigation(tree)
       }
     },
 
